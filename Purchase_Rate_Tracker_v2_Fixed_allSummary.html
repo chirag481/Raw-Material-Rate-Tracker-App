@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Purchase Rate Tracker — Gayatri Industries</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#1a2e4a;--blue:#2563a8;--accent:#f59e0b;
+  --green:#16a34a;--red:#dc2626;--purple:#7c3aed;--orange:#ea580c;
+  --bg:#f0f4f8;--card:#fff;--border:#dde3ec;--muted:#64748b;--text:#0f172a;
+  --row1:#fff;--row2:#f5f8fc;--first:#e8f0fb;
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px}
+
+#appHeader{background:var(--navy);color:#fff;padding:8px 24px;min-height:52px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:3px solid var(--accent);position:sticky;top:0;z-index:100}
+.logo{width:36px;height:36px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;color:var(--navy);flex-shrink:0}
+#appHeader h1{font-size:15px;font-weight:700}
+#appHeader p{font-size:11px;color:#94a3b8;margin-top:1px}
+#fileStatus{margin-left:auto;font-size:11px;color:#94a3b8;white-space:nowrap}
+#fileStatus.loaded{color:#4ade80}
+
+#uploadScreen{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 52px);padding:24px}
+.upload-box{background:var(--card);border:2px dashed var(--border);border-radius:16px;padding:56px 48px;text-align:center;cursor:pointer;max-width:480px;width:100%;transition:border-color .2s,background .2s;position:relative}
+.upload-box:hover,.upload-box.drag-over{border-color:var(--blue);background:#eff6ff}
+.upload-box input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upload-box .icon{font-size:52px;margin-bottom:14px}
+.upload-box h2{font-size:18px;font-weight:700;color:var(--navy);margin-bottom:6px}
+.upload-box p{font-size:12px;color:var(--muted)}
+
+#mainApp{display:none}
+
+/* ── FILTER BAR ── */
+#filterBar{background:var(--card);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;position:sticky;top:52px;z-index:90;box-shadow:0 2px 6px rgba(0,0,0,.04)}
+.fg{position:relative;display:flex;flex-direction:column;gap:3px}
+.fg label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.fi{border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--text);background:#fff;outline:none;transition:border-color .15s}
+.fi:focus{border-color:var(--blue);box-shadow:0 0 0 2px #dbeafe}
+.date-row{display:flex;gap:5px;align-items:center}
+.date-row input{width:130px}
+.date-row span{color:var(--muted);font-size:11px}
+
+/* dropdown */
+.ddl{position:absolute;top:calc(100% + 2px);left:0;min-width:240px;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.14);max-height:240px;overflow-y:auto;z-index:300;display:none}
+.ddl.open{display:block}
+.ddi{padding:7px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px}
+.ddi:hover{background:#eff6ff}
+.ddi.sel{background:#dbeafe;font-weight:600;color:var(--blue)}
+.ddi-count{margin-left:auto;font-size:10px;color:var(--muted);background:#f1f5f9;padding:1px 6px;border-radius:8px}
+.ddl-empty{padding:12px;text-align:center;font-size:12px;color:var(--muted)}
+
+/* tags */
+.tags-row{display:flex;gap:5px;flex-wrap:wrap;align-items:center;max-width:400px}
+.tag{background:#dbeafe;color:var(--blue);border-radius:10px;padding:3px 10px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:3px;cursor:pointer;border:none}
+.tag:hover{background:#bfdbfe}
+.tag-x{opacity:.6;font-size:12px}
+.tag.tg-vendor{background:#dcfce7;color:#166534}
+.tag.tg-material{background:#ede9fe;color:#5b21b6}
+
+.btn-sm{padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:#f8fafc;font-size:11px;font-weight:600;cursor:pointer;color:var(--muted)}
+.btn-sm:hover{background:#e2e8f0}
+#filterCount{font-size:11px;color:var(--muted);white-space:nowrap;align-self:flex-end;padding-bottom:6px}
+
+/* ── SPIKE THRESHOLD ── */
+.spike-ctrl{display:flex;align-items:center;gap:8px;margin-left:auto;align-self:flex-end;padding-bottom:4px}
+.spike-ctrl label{font-size:11px;font-weight:700;color:var(--orange)}
+.spike-ctrl input[type=range]{width:100px;accent-color:var(--orange)}
+.spike-ctrl span{font-size:12px;font-weight:700;color:var(--orange);min-width:34px}
+
+/* ── TABS ── */
+#tabBar{background:var(--card);border-bottom:1px solid var(--border);padding:0 16px;display:flex;overflow-x:auto}
+.tb{padding:10px 16px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.tb:hover{color:var(--navy)}
+.tb.active{color:var(--blue);border-bottom-color:var(--blue)}
+.tb .badge-count{background:#fee2e2;color:var(--red);border-radius:8px;padding:1px 6px;font-size:10px;margin-left:4px}
+
+#tabContent{padding:16px;min-height:calc(100vh - 200px)}
+.tp{display:none}.tp.active{display:block}
+
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;border-left:4px solid var(--blue)}
+.kpi .val{font-size:20px;font-weight:800;color:var(--navy)}
+.kpi .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+.kpi.k-green{border-left-color:var(--green)}
+.kpi.k-amber{border-left-color:var(--accent)}
+.kpi.k-red{border-left-color:var(--red)}
+.kpi.k-purple{border-left-color:var(--purple)}
+.kpi.k-orange{border-left-color:var(--orange)}
+
+/* CHARTS */
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.cc{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px}
+.cc h3{font-size:11px;font-weight:700;color:var(--navy);margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em}
+.cc canvas{max-height:230px}
+.cc.wide{grid-column:1/-1}
+
+/* TABLES */
+.tw{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px}
+.th2{padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.th2 h3{font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.04em}
+.th2 span{font-size:11px;color:var(--muted)}
+.ts{overflow-x:auto;max-height:440px;overflow-y:auto}
+table{border-collapse:collapse;width:100%;font-size:12px}
+thead th{background:var(--navy);color:#fff;padding:8px 10px;text-align:left;font-weight:600;white-space:nowrap;position:sticky;top:0;z-index:1;border-right:1px solid #2d3f58;cursor:pointer;user-select:none}
+thead th:hover{background:#2d4a6e}
+.si{opacity:.4;margin-left:3px;font-size:10px}
+tbody tr:nth-child(odd){background:var(--row1)}
+tbody tr:nth-child(even){background:var(--row2)}
+tbody tr:hover{background:#dbeafe!important}
+tbody td{padding:6px 10px;border-bottom:1px solid var(--border);border-right:1px solid #f1f5f9;white-space:nowrap}
+td.r{text-align:right;font-variant-numeric:tabular-nums}
+td.c{text-align:center}
+
+.up{color:var(--red);font-weight:700}
+.dn{color:var(--green);font-weight:700}
+.nc{color:var(--muted)}
+
+/* ALERT ROWS */
+tr.spike-row{background:#fff5f5!important}
+tr.drop-row{background:#f0fdf4!important}
+.alert-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700}
+.ab-spike{background:#fee2e2;color:#991b1b}
+.ab-drop{background:#dcfce7;color:#166534}
+
+/* SPIKE ALERT CARDS */
+.alert-list{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.alert-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;display:flex;gap:12px;align-items:center}
+.alert-card.spike{border-left:4px solid var(--red)}
+.alert-card.drop{border-left:4px solid var(--green)}
+.ac-icon{font-size:22px}
+.ac-body{flex:1;min-width:0}
+.ac-title{font-weight:700;font-size:13px;color:var(--navy)}
+.ac-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.ac-pct{font-size:18px;font-weight:800;white-space:nowrap}
+.ac-pct.red{color:var(--red)}
+.ac-pct.green{color:var(--green)}
+
+/* BADGES */
+.badge{display:inline-block;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600}
+.bg-blue{background:#dbeafe;color:#1e40af}
+.bg-green{background:#dcfce7;color:#166534}
+.bg-red{background:#fee2e2;color:#991b1b}
+.bg-amber{background:#fef3c7;color:#92400e}
+.bv{color:var(--green);font-weight:700}
+
+/* INVOICE */
+.ic{background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.ih{background:#f8fafc;padding:8px 14px;display:flex;gap:14px;align-items:center;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.ih .vno{font-weight:700;color:var(--navy);font-size:13px}
+.ih .vnd{color:var(--blue);font-size:12px}
+.ih .vdt{color:var(--muted);font-size:11px}
+.ih .vamt{margin-left:auto;font-weight:700;color:var(--navy)}
+
+.empty{text-align:center;padding:48px;color:var(--muted)}
+.empty .ei{font-size:40px;margin-bottom:10px}
+
+.pg{display:flex;gap:5px;align-items:center;justify-content:flex-end;padding:10px 14px;border-top:1px solid var(--border)}
+.pgb{padding:4px 9px;border:1px solid var(--border);border-radius:5px;cursor:pointer;font-size:11px;background:#fff}
+.pgb:hover{background:#eff6ff}
+.pgb.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.pgi{font-size:11px;color:var(--muted)}
+
+.sl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;margin-top:14px}
+</style>
+</head>
+<body>
+
+<div id="appHeader">
+  <div class="logo">GI</div>
+  <div>
+    <h1>Purchase Rate Tracker</h1>
+    <p>Gayatri Industries · Vendor &amp; Rate Intelligence</p>
+  </div>
+  <button id="pdfBtnVendor" class="btn-sm" style="background:#fff;color:var(--navy);font-weight:700;flex-shrink:0" onclick="generateVendorWisePDF()" disabled>📄 Vendor-wise PDF</button>
+  <button id="pdfBtnItem" class="btn-sm" style="background:#fff;color:var(--navy);font-weight:700;flex-shrink:0" onclick="generateItemWisePDF()" disabled>📄 Raw Material-wise PDF</button>
+  <button id="pdfBtnDate" class="btn-sm" style="background:#fff;color:var(--navy);font-weight:700;flex-shrink:0" onclick="generateDateWisePDF()" disabled>📄 Date-wise PDF</button>
+  <div id="fileStatus">No file loaded</div>
+</div>
+
+<div id="uploadScreen">
+  <div class="upload-box" id="dropZone">
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <div class="icon">📊</div>
+    <h2>Upload Purchase Register</h2>
+    <p>Drag &amp; drop your Excel file here or click to browse</p>
+    <p style="margin-top:8px;font-size:11px;color:#94a3b8">Columns: Sr.No · Date · Vendor · Vch No. · Item · Qty · Unit · Rate · Amount</p>
+  </div>
+</div>
+
+<div id="mainApp">
+
+  <!-- FILTER BAR -->
+  <div id="filterBar">
+
+    <div class="fg">
+      <label>Date From</label>
+      <input class="fi" type="date" id="fFrom" style="width:130px" onchange="applyFilters()">
+    </div>
+    <div class="fg">
+      <label>Date To</label>
+      <input class="fi" type="date" id="fTo" style="width:130px" onchange="applyFilters()">
+    </div>
+
+    <div class="fg" id="vg">
+      <label>Vendor</label>
+      <input class="fi" id="vSearch" style="width:190px" placeholder="Search vendor…" autocomplete="off"
+        oninput="onSearch('v')" onfocus="openDDL('v')" onblur="closeDDL('v',250)">
+      <div class="ddl" id="vDDL"></div>
+    </div>
+
+    <div class="fg" id="mg">
+      <label>Material / Item</label>
+      <input class="fi" id="mSearch" style="width:200px" placeholder="Search item…" autocomplete="off"
+        oninput="onSearch('m')" onfocus="openDDL('m')" onblur="closeDDL('m',250)">
+      <div class="ddl" id="mDDL"></div>
+    </div>
+
+    <div class="fg">
+      <label>Active Filters</label>
+      <div class="tags-row" id="tagsRow" style="padding-top:4px"></div>
+    </div>
+
+    <button class="btn-sm" onclick="clearAll()" style="align-self:flex-end;margin-bottom:2px">✕ Clear All</button>
+    <div id="filterCount"></div>
+
+    <!-- Spike threshold -->
+    <div class="spike-ctrl">
+      <label>⚡ Spike/Drop Alert Threshold:</label>
+      <input type="range" id="spikeThresh" min="1" max="50" value="10" oninput="updateThreshLabel();applyFilters()">
+      <span id="threshLabel">10%</span>
+    </div>
+
+  </div>
+
+  <!-- TAB BAR -->
+  <div id="tabBar">
+    <button class="tb active" onclick="switchTab('dashboard')">📈 Dashboard</button>
+    <button class="tb" onclick="switchTab('ratelog')">📋 Rate Log</button>
+    <button class="tb" onclick="switchTab('alerts')" id="alertsTab">⚡ Alerts <span class="badge-count" id="alertBadge" style="display:none">0</span></button>
+    <button class="tb" onclick="switchTab('comparison')">⚖️ Vendor Comparison</button>
+    <button class="tb" onclick="switchTab('trend')">📉 Rate Trend</button>
+    <button class="tb" onclick="switchTab('invoices')">🧾 Invoices</button>
+    <button class="tb" onclick="switchTab('lowest')">🏆 Lowest Rate</button>
+  </div>
+
+  <div id="tabContent">
+
+    <!-- DASHBOARD -->
+    <div class="tp active" id="tp-dashboard">
+      <div class="kpi-grid" id="kpiGrid"></div>
+      <div class="chart-row">
+        <div class="cc"><h3>Top 10 Vendors by Spend</h3><canvas id="cVendor"></canvas></div>
+        <div class="cc"><h3>Top 10 Items by Spend</h3><canvas id="cMaterial"></canvas></div>
+      </div>
+      <div class="chart-row">
+        <div class="cc wide"><h3>Monthly Purchase Trend</h3><canvas id="cMonthly"></canvas></div>
+      </div>
+    </div>
+
+    <!-- RATE LOG -->
+    <div class="tp" id="tp-ratelog">
+      <div class="tw">
+        <div class="th2"><h3>Rate Log</h3><span id="rlCount"></span></div>
+        <div class="ts">
+          <table><thead><tr>
+            <th onclick="srt('rl','dateISO')">Date<span class="si">↕</span></th>
+            <th onclick="srt('rl','vendor')">Vendor<span class="si">↕</span></th>
+            <th onclick="srt('rl','vchNo')">Vch No.<span class="si">↕</span></th>
+            <th onclick="srt('rl','item')">Item<span class="si">↕</span></th>
+            <th onclick="srt('rl','qty')" style="text-align:right">Qty<span class="si">↕</span></th>
+            <th>Unit</th>
+            <th onclick="srt('rl','rate')" style="text-align:right">Rate<span class="si">↕</span></th>
+            <th onclick="srt('rl','amount')" style="text-align:right">Amount<span class="si">↕</span></th>
+            <th style="text-align:center">Rate Δ (vs same vendor)</th>
+          </tr></thead>
+          <tbody id="rlBody"></tbody></table>
+        </div>
+        <div class="pg" id="rlPg"></div>
+      </div>
+    </div>
+
+    <!-- ALERTS -->
+    <div class="tp" id="tp-alerts">
+      <div class="kpi-grid" id="alertKpi"></div>
+      <div class="cc wide" style="margin-bottom:14px">
+        <h3>Spike &amp; Drop Distribution</h3>
+        <canvas id="cAlerts" style="max-height:200px"></canvas>
+      </div>
+      <div class="tw">
+        <div class="th2"><h3 id="alertTableTitle">Rate Alerts</h3><span id="alertCount"></span></div>
+        <div class="ts">
+          <table><thead><tr>
+            <th>Type</th>
+            <th onclick="srt('al','dateISO')">Date<span class="si">↕</span></th>
+            <th onclick="srt('al','vendor')">Vendor<span class="si">↕</span></th>
+            <th onclick="srt('al','item')">Item<span class="si">↕</span></th>
+            <th style="text-align:right" onclick="srt('al','prevRate')">Prev Rate<span class="si">↕</span></th>
+            <th style="text-align:right" onclick="srt('al','rate')">New Rate<span class="si">↕</span></th>
+            <th style="text-align:right" onclick="srt('al','changePct')">Change %<span class="si">↕</span></th>
+            <th style="text-align:right">Change ₹</th>
+            <th>Vch No.</th>
+          </tr></thead>
+          <tbody id="alBody"></tbody></table>
+        </div>
+        <div class="pg" id="alPg"></div>
+      </div>
+    </div>
+
+    <!-- VENDOR COMPARISON -->
+    <div class="tp" id="tp-comparison">
+      <div class="sl">Select an item to compare vendor rates</div>
+      <div class="fg" style="margin-bottom:12px;position:relative">
+        <input class="fi" id="ciSearch" style="width:300px" placeholder="Type item name…" autocomplete="off"
+          oninput="populateCIDrop()" onfocus="document.getElementById('ciDDL').classList.add('open')"
+          onblur="setTimeout(()=>document.getElementById('ciDDL').classList.remove('open'),300)">
+        <div class="ddl open" id="ciDDL" style="width:300px"></div>
+      </div>
+      <div class="cc" id="compCC" style="display:none;margin-bottom:12px">
+        <h3 id="compCTitle"></h3><canvas id="cComp" style="max-height:260px"></canvas>
+      </div>
+      <div class="tw" id="compTW" style="display:none">
+        <div class="th2"><h3 id="compTTitle">Vendor Comparison</h3><span id="compCnt"></span></div>
+        <div class="ts"><table><thead><tr>
+          <th>Vendor</th><th style="text-align:right">Purchases</th>
+          <th style="text-align:right">Min Rate</th><th style="text-align:right">Max Rate</th>
+          <th style="text-align:right">Avg Rate</th><th style="text-align:right">Last Rate</th>
+          <th>Last Date</th><th style="text-align:right">Total Qty</th><th style="text-align:right">Total Spend</th>
+        </tr></thead><tbody id="compBody"></tbody></table></div>
+      </div>
+      <div class="empty" id="compEmpty"><div class="ei">⚖️</div><p>Search for an item above to compare vendors</p></div>
+    </div>
+
+    <!-- TREND -->
+    <div class="tp" id="tp-trend">
+      <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        <div class="fg" style="position:relative">
+          <label>Item</label>
+          <input class="fi" id="tiSearch" style="width:280px" placeholder="Type item name…" autocomplete="off"
+            oninput="populateTIDrop()" onfocus="document.getElementById('tiDDL').classList.add('open')"
+            onblur="setTimeout(()=>document.getElementById('tiDDL').classList.remove('open'),300)">
+          <div class="ddl open" id="tiDDL" style="width:280px"></div>
+        </div>
+        <div class="fg" style="position:relative">
+          <label>Vendor (optional)</label>
+          <input class="fi" id="tvSearch" style="width:220px" placeholder="All vendors" autocomplete="off"
+            oninput="populateTVDrop()" onfocus="document.getElementById('tvDDL').classList.add('open')"
+            onblur="setTimeout(()=>document.getElementById('tvDDL').classList.remove('open'),300)">
+          <div class="ddl" id="tvDDL" style="width:220px"></div>
+        </div>
+      </div>
+      <div class="cc wide" id="trendCC" style="display:none;margin-bottom:12px">
+        <h3 id="trendCTitle"></h3><canvas id="cTrend" style="max-height:280px"></canvas>
+      </div>
+      <div class="tw" id="trendTW" style="display:none">
+        <div class="th2"><h3>Rate History</h3><span id="trendCnt"></span></div>
+        <div class="ts"><table><thead><tr>
+          <th>Date</th><th>Vendor</th><th>Vch No.</th>
+          <th style="text-align:right">Qty</th><th>Unit</th>
+          <th style="text-align:right">Rate</th><th style="text-align:right">Amount</th>
+          <th style="text-align:center">Change</th>
+        </tr></thead><tbody id="trendBody"></tbody></table></div>
+      </div>
+      <div class="empty" id="trendEmpty"><div class="ei">📉</div><p>Select an item to see rate history</p></div>
+    </div>
+
+    <!-- INVOICES -->
+    <div class="tp" id="tp-invoices">
+      <div class="th2" style="background:var(--card);border:1px solid var(--border);border-radius:10px 10px 0 0">
+        <h3>Invoice View</h3><span id="invCnt"></span>
+      </div>
+      <div id="invList"></div>
+      <div class="pg" id="invPg"></div>
+    </div>
+
+    <!-- LOWEST RATE -->
+    <div class="tp" id="tp-lowest">
+      <div class="tw">
+        <div class="th2"><h3>Lowest Rate Finder — Best Vendor per Item</h3><span id="lowCnt"></span></div>
+        <div class="ts"><table><thead><tr>
+          <th onclick="srt('lw','item')">Item<span class="si">↕</span></th>
+          <th>Unit</th>
+          <th onclick="srt('lw','bestVendor')" style="color:#4ade80">Best Vendor<span class="si">↕</span></th>
+          <th onclick="srt('lw','bestRate')" style="text-align:right">Best Rate<span class="si">↕</span></th>
+          <th>Best Date</th>
+          <th onclick="srt('lw','lastRate')" style="text-align:right">Last Rate<span class="si">↕</span></th>
+          <th>Last Vendor</th>
+          <th onclick="srt('lw','avgRate')" style="text-align:right">Avg Rate<span class="si">↕</span></th>
+          <th style="text-align:right">Vendors</th>
+          <th style="text-align:right">Purchases</th>
+        </tr></thead><tbody id="lwBody"></tbody></table></div>
+        <div class="pg" id="lwPg"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════ DATA ═══════════════════════════
+let ALL=[], FILTERED=[], ALERTS=[];
+let activeTab='dashboard';
+let fVendors=[], fMaterials=[], fFrom='', fTo='';
+let spikeThresh=10;
+let SS={};  // sort state per table
+let PG={rl:{p:1,pp:150}, al:{p:1,pp:100}, inv:{p:1,pp:30}, lw:{p:1,pp:150}};
+let CI={}, CH={};  // chart instances
+const COLORS=['#2563a8','#16a34a','#ea580c','#7c3aed','#0891b2','#be185d','#854d0e','#0369a1','#15803d','#b45309'];
+
+// Interdependent dropdown data (changes based on current filters)
+let ddVendors=[], ddMaterials=[];
+
+// Comparison & Trend selections
+let compItem='', trendItem='', trendVendor='';
+
+// ═══════════════════════════ ESCAPE (for safe HTML display) ═══════════════════════════
+function esc(s) {
+  if (!s) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// ═══════════════════════════ FILE LOAD ═══════════════════════════
+const fileInput=document.getElementById('fileInput');
+const dropZone=document.getElementById('dropZone');
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag-over')});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag-over');if(e.dataTransfer.files[0])loadFile(e.dataTransfer.files[0])});
+fileInput.addEventListener('change',()=>{if(fileInput.files[0])loadFile(fileInput.files[0])});
+
+function loadFile(f){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array',cellDates:false});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
+      parseData(raw,f.name);
+    }catch(err){alert('Error: '+err.message);}
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+function excelDateToJS(v){
+  // Fix: add 1 day correction as reported
+  if(typeof v==='number' && v>1){
+    const ms=(v-25569)*86400*1000;
+    return new Date(ms);
+  }
+  if(typeof v==='string' && v){
+    const d=new Date(v);
+    return isNaN(d)?null:d;
+  }
+  return null;
+}
+
+function fmtDate(d){
+  if(!d) return '';
+  const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${String(d.getDate()).padStart(2,'0')}-${mo[d.getMonth()]}-${d.getFullYear()}`;
+}
+
+function parseData(raw,fname){
+  ALL=[];
+  for(const r of raw){
+    const k=Object.keys(r);
+    if(k.length<8) continue;
+    const dateRaw=r[k[1]];
+    let dateObj=excelDateToJS(dateRaw);
+    if(!dateObj||isNaN(dateObj.getTime())) continue;
+    const vendor=String(r[k[2]]||'').trim();
+    const vchNo=String(r[k[3]]||'').trim();
+    const item=String(r[k[4]]||'').trim();
+    const qty=parseFloat(r[k[5]])||0;
+    const unit=String(r[k[6]]||'').trim();
+    const rate=parseFloat(r[k[7]])||0;
+    const amount=parseFloat(r[k[8]])||0;
+    if(!vendor||!item||!rate) continue;
+    ALL.push({
+      dateObj, dateStr:fmtDate(dateObj),
+      dateISO:dateObj.toISOString().slice(0,10),
+      vendor, vchNo, item, qty, unit, rate, amount
+    });
+  }
+  ALL.sort((a,b)=>a.dateObj-b.dateObj);
+
+  // Pre-compute rate change vs same vendor for same item (also remembers prev date/invoice)
+  const prev={};
+  for(const r of ALL){
+    const k=r.item+'§'+r.vendor;
+    const p=prev[k];
+    r.prevRate=p?p.rate:null;
+    r.prevDate=p?p.dateStr:null;
+    r.prevVchNo=p?p.vchNo:null;
+    r.rateChange=r.prevRate!==null?r.rate-r.prevRate:null;
+    r.changePct=r.prevRate?((r.rate-r.prevRate)/r.prevRate*100):null;
+    prev[k]={rate:r.rate,dateStr:r.dateStr,vchNo:r.vchNo};
+  }
+
+  if(ALL.length){
+    document.getElementById('fFrom').value=ALL[0].dateISO;
+    document.getElementById('fTo').value=ALL[ALL.length-1].dateISO;
+    fFrom=ALL[0].dateISO; fTo=ALL[ALL.length-1].dateISO;
+  }
+  document.getElementById('fileStatus').textContent=`✓ ${fname} — ${ALL.length.toLocaleString()} rows`;
+  document.getElementById('fileStatus').className='loaded';
+  document.getElementById('uploadScreen').style.display='none';
+  document.getElementById('mainApp').style.display='block';
+  document.getElementById('pdfBtnVendor').disabled=false;
+  document.getElementById('pdfBtnItem').disabled=false;
+  document.getElementById('pdfBtnDate').disabled=false;
+  applyFilters();
+}
+
+// ═══════════════════════════ FILTERS ═══════════════════════════
+function applyFilters(){
+  fFrom=document.getElementById('fFrom').value;
+  fTo=document.getElementById('fTo').value;
+  spikeThresh=parseInt(document.getElementById('spikeThresh').value)||10;
+
+  FILTERED=ALL.filter(r=>{
+    if(fFrom && r.dateISO<fFrom) return false;
+    if(fTo   && r.dateISO>fTo)   return false;
+    if(fVendors.length && !fVendors.includes(r.vendor)) return false;
+    if(fMaterials.length && !fMaterials.includes(r.item)) return false;
+    return true;
+  });
+
+  // Build INTERDEPENDENT dropdown options from FILTERED data
+  // (only show vendors that appear in current date+material filtered set, etc.)
+  const baseForV=ALL.filter(r=>{
+    if(fFrom && r.dateISO<fFrom) return false;
+    if(fTo   && r.dateISO>fTo)   return false;
+    if(fMaterials.length && !fMaterials.includes(r.item)) return false;
+    return true;
+  });
+  const baseForM=ALL.filter(r=>{
+    if(fFrom && r.dateISO<fFrom) return false;
+    if(fTo   && r.dateISO>fTo)   return false;
+    if(fVendors.length && !fVendors.includes(r.vendor)) return false;
+    return true;
+  });
+  ddVendors=[...new Set(baseForV.map(r=>r.vendor))].sort();
+  ddMaterials=[...new Set(baseForM.map(r=>r.item))].sort();
+
+  // Compute alerts
+  ALERTS=FILTERED.filter(r=>r.changePct!==null && Math.abs(r.changePct)>=spikeThresh)
+    .map(r=>({...r, alertType:r.changePct>0?'spike':'drop'}));
+
+  // Update alert badge
+  const badge=document.getElementById('alertBadge');
+  badge.textContent=ALERTS.length;
+  badge.style.display=ALERTS.length?'inline-block':'none';
+
+  document.getElementById('filterCount').textContent=
+    `${FILTERED.length.toLocaleString()} rows · ${ALERTS.length} alerts`;
+
+  renderTags();
+
+  // REFRESH DROPDOWNS so they reflect the new filter state
+  buildVDDL();
+  buildMDDL();
+
+  PG.rl.p=1; PG.al.p=1; PG.inv.p=1; PG.lw.p=1;
+  renderActive();
+}
+
+function updateThreshLabel(){
+  document.getElementById('threshLabel').textContent=document.getElementById('spikeThresh').value+'%';
+}
+
+// ═══════════════════════════ INTERDEPENDENT DROPDOWNS (Event Delegation Fix) ═══════════════════════════
+function onSearch(type){
+  if(type==='v') buildVDDL(); else buildMDDL();
+  document.getElementById(type==='v'?'vDDL':'mDDL').classList.add('open');
+}
+function openDDL(type){ if(type==='v') buildVDDL(); else buildMDDL(); document.getElementById(type==='v'?'vDDL':'mDDL').classList.add('open'); }
+function closeDDL(type,d){ setTimeout(()=>document.getElementById(type==='v'?'vDDL':'mDDL').classList.remove('open'),d); }
+
+function buildVDDL(){
+  const q=document.getElementById('vSearch').value.toLowerCase();
+  const list=ddVendors.filter(v=>v.toLowerCase().includes(q));
+  const el=document.getElementById('vDDL');
+  if(!list.length){el.innerHTML='<div class="ddl-empty">No vendors found</div>';return;}
+  el.innerHTML=list.slice(0,80).map(v=>{
+    const cnt=FILTERED.filter(r=>r.vendor===v).length;
+    const sel=fVendors.includes(v);
+    return `<div class="ddi${sel?' sel':''}" data-type="v" data-value="${encodeURIComponent(v)}">
+      ${sel?'✓ ':''}<span>${esc(v)}</span>
+      <span class="ddi-count">${cnt}</span></div>`;
+  }).join('');
+}
+
+function buildMDDL(){
+  const q=document.getElementById('mSearch').value.toLowerCase();
+  const list=ddMaterials.filter(m=>m.toLowerCase().includes(q));
+  const el=document.getElementById('mDDL');
+  if(!list.length){el.innerHTML='<div class="ddl-empty">No items found</div>';return;}
+  el.innerHTML=list.slice(0,80).map(m=>{
+    const cnt=FILTERED.filter(r=>r.item===m).length;
+    const sel=fMaterials.includes(m);
+    return `<div class="ddi${sel?' sel':''}" data-type="m" data-value="${encodeURIComponent(m)}">
+      ${sel?'✓ ':''}<span>${esc(m)}</span>
+      <span class="ddi-count">${cnt}</span></div>`;
+  }).join('');
+}
+
+// Event delegation for dropdown clicks — handles special characters safely
+function handleDDClick(e){
+  const div=e.target.closest('.ddi');
+  if(!div) return;
+  const type=div.dataset.type;
+  const value=decodeURIComponent(div.dataset.value);
+  toggleF(type, value);
+}
+
+document.getElementById('vDDL').addEventListener('click', handleDDClick);
+document.getElementById('mDDL').addEventListener('click', handleDDClick);
+
+function toggleF(type,val){
+  if(type==='v'){
+    fVendors=fVendors.includes(val)?fVendors.filter(x=>x!==val):[...fVendors,val];
+  } else {
+    fMaterials=fMaterials.includes(val)?fMaterials.filter(x=>x!==val):[...fMaterials,val];
+  }
+  applyFilters();
+}
+
+function renderTags(){
+  const el=document.getElementById('tagsRow');
+  el.innerHTML=[
+    ...fVendors.map(v=>`<button class="tag tg-vendor" data-type="v" data-value="${encodeURIComponent(v)}">🏢 ${esc(v)} <span class="tag-x">✕</span></button>`),
+    ...fMaterials.map(m=>`<button class="tag tg-material" data-type="m" data-value="${encodeURIComponent(m)}">📦 ${esc(m)} <span class="tag-x">✕</span></button>`)
+  ].join('');
+}
+
+// Event delegation for tag clicks
+function handleTagClick(e){
+  const btn=e.target.closest('.tag');
+  if(!btn) return;
+  const type=btn.dataset.type;
+  const value=decodeURIComponent(btn.dataset.value);
+  toggleF(type, value);
+}
+
+document.getElementById('tagsRow').addEventListener('click', handleTagClick);
+
+function clearAll(){
+  fVendors=[]; fMaterials=[];
+  document.getElementById('vSearch').value='';
+  document.getElementById('mSearch').value='';
+  if(ALL.length){
+    document.getElementById('fFrom').value=ALL[0].dateISO;
+    document.getElementById('fTo').value=ALL[ALL.length-1].dateISO;
+  }
+  applyFilters();
+}
+
+// ═══════════════════════════ TABS ═══════════════════════════
+function switchTab(name){
+  activeTab=name;
+  document.querySelectorAll('.tb').forEach((b,i)=>{
+    const tabs=['dashboard','ratelog','alerts','comparison','trend','invoices','lowest'];
+    b.classList.toggle('active',tabs[i]===name);
+  });
+  document.querySelectorAll('.tp').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tp-'+name).classList.add('active');
+  renderActive();
+}
+function renderActive(){
+  if(activeTab==='dashboard') renderDash();
+  else if(activeTab==='ratelog') renderRateLog();
+  else if(activeTab==='alerts') renderAlerts();
+  else if(activeTab==='comparison') renderComp();
+  else if(activeTab==='trend') renderTrend();
+  else if(activeTab==='invoices') renderInvoices();
+  else if(activeTab==='lowest') renderLowest();
+}
+
+// ═══════════════════════════ HELPERS ═══════════════════════════
+function N(n,d=2){if(n===null||n===undefined||n==='') return ''; return Number(n).toLocaleString('en-IN',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function A(n){return '₹'+N(n);}
+function dC(id){if(CI[id]){CI[id].destroy();delete CI[id];}}
+
+function srt(tbl,col){
+  if(!SS[tbl]) SS[tbl]={col,dir:1};
+  else if(SS[tbl].col===col) SS[tbl].dir*=-1;
+  else SS[tbl]={col,dir:1};
+  renderActive();
+}
+function sortArr(arr,tbl){
+  const s=SS[tbl]; if(!s) return arr;
+  return [...arr].sort((a,b)=>{
+    const av=a[s.col],bv=b[s.col];
+    if(av==null) return 1; if(bv==null) return -1;
+    return (typeof av==='number'?(av-bv):String(av).localeCompare(String(bv)))*s.dir;
+  });
+}
+
+function renderPg(tbl,total,pp,cur,elId){
+  const pages=Math.ceil(total/pp);
+  const el=document.getElementById(elId);
+  if(pages<=1){el.innerHTML='';return;}
+  let h=`<span class="pgi">${total.toLocaleString()} items · Page ${cur}/${pages}</span>`;
+  if(cur>1) h+=`<button class="pgb" onclick="goPg('${tbl}',1)">«</button><button class="pgb" onclick="goPg('${tbl}',${cur-1})">‹</button>`;
+  const s=Math.max(1,cur-2),e=Math.min(pages,cur+2);
+  for(let p=s;p<=e;p++) h+=`<button class="pgb${p===cur?' active':''}" onclick="goPg('${tbl}',${p})">${p}</button>`;
+  if(cur<pages) h+=`<button class="pgb" onclick="goPg('${tbl}',${cur+1})">›</button><button class="pgb" onclick="goPg('${tbl}',${pages})">»</button>`;
+  el.innerHTML=h;
+}
+function goPg(tbl,p){
+  const map={rl:'rl',al:'al',inv:'inv',lw:'lw'};
+  PG[map[tbl]].p=p; renderActive();
+}
+
+// ═══════════════════════════ 1. DASHBOARD ═══════════════════════════
+function renderDash(){
+  const rows=FILTERED;
+  if(!rows.length){document.getElementById('kpiGrid').innerHTML='<div class="empty"><div class="ei">📊</div><p>No data for selected filters</p></div>';return;}
+  const spend=rows.reduce((s,r)=>s+r.amount,0);
+  const vchs=new Set(rows.map(r=>r.vchNo)).size;
+  const vns=new Set(rows.map(r=>r.vendor)).size;
+  const its=new Set(rows.map(r=>r.item)).size;
+  document.getElementById('kpiGrid').innerHTML=`
+    <div class="kpi"><div class="val">₹${N(spend/1e5,1)}L</div><div class="lbl">Total Purchase</div></div>
+    <div class="kpi k-green"><div class="val">${vchs}</div><div class="lbl">Invoices</div></div>
+    <div class="kpi k-amber"><div class="val">${vns}</div><div class="lbl">Vendors</div></div>
+    <div class="kpi k-purple"><div class="val">${its}</div><div class="lbl">Unique Items</div></div>
+    <div class="kpi k-red"><div class="val">${rows.length}</div><div class="lbl">Line Items</div></div>
+    <div class="kpi k-orange"><div class="val">${ALERTS.length}</div><div class="lbl">Rate Alerts</div></div>`;
+
+  const vsp={};rows.forEach(r=>{vsp[r.vendor]=(vsp[r.vendor]||0)+r.amount;});
+  const tv=Object.entries(vsp).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  dC('cVendor');
+  const cv=document.getElementById('cVendor').getContext('2d');
+  CI['cVendor']=new Chart(cv,{type:'bar',data:{labels:tv.map(v=>v[0].slice(0,18)),datasets:[{data:tv.map(v=>v[1]),backgroundColor:COLORS}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:v=>'₹'+N(v/1e3,0)+'K'}}}}});
+
+  const msp={};rows.forEach(r=>{msp[r.item]=(msp[r.item]||0)+r.amount;});
+  const tm=Object.entries(msp).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  dC('cMaterial');
+  const cm=document.getElementById('cMaterial').getContext('2d');
+  CI['cMaterial']=new Chart(cm,{type:'bar',data:{labels:tm.map(v=>v[0].slice(0,20)),datasets:[{data:tm.map(v=>v[1]),backgroundColor:COLORS}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:v=>'₹'+N(v/1e3,0)+'K'}}}}});
+
+  const mon={};rows.forEach(r=>{const k=r.dateISO.slice(0,7);mon[k]=(mon[k]||0)+r.amount;});
+  const mks=Object.keys(mon).sort();
+  dC('cMonthly');
+  const cmo=document.getElementById('cMonthly').getContext('2d');
+  CI['cMonthly']=new Chart(cmo,{type:'line',data:{labels:mks,datasets:[{label:'Spend',data:mks.map(m=>mon[m]),borderColor:COLORS[0],backgroundColor:'rgba(37,99,168,.1)',fill:true,tension:.35,pointRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'₹'+N(v/1e3,0)+'K'}}}}});
+}
+
+// ═══════════════════════════ 2. RATE LOG ═══════════════════════════
+function renderRateLog(){
+  let rows=sortArr(FILTERED,'rl');
+  const tot=rows.length;
+  const {p,pp}=PG.rl;
+  const paged=rows.slice((p-1)*pp,p*pp);
+  document.getElementById('rlCount').textContent=`${tot.toLocaleString()} rows`;
+  document.getElementById('rlBody').innerHTML=paged.map(r=>{
+    const pct=r.changePct;
+    const isAlert=pct!==null && Math.abs(pct)>=spikeThresh;
+    const dh=r.rateChange!==null
+      ?`<span class="${r.rateChange>0?'up':'dn'}">${r.rateChange>0?'▲':'▼'} ${N(Math.abs(r.rateChange))} (${N(Math.abs(pct),1)}%)${isAlert?` <span class="alert-badge ${r.rateChange>0?'ab-spike':'ab-drop'}">${r.rateChange>0?'⚡ SPIKE':'💚 DROP'}</span>`:''}</span>`
+      :'<span class="nc">—</span>';
+    return `<tr class="${isAlert?(r.rateChange>0?'spike-row':'drop-row'):''}">
+      <td>${r.dateStr}</td><td title="${esc(r.vendor)}">${esc(r.vendor).slice(0,26)}</td>
+      <td>${esc(r.vchNo)}</td><td title="${esc(r.item)}">${esc(r.item).slice(0,28)}</td>
+      <td class="r">${N(r.qty)}</td><td>${esc(r.unit)}</td>
+      <td class="r"><strong>${N(r.rate)}</strong></td>
+      <td class="r">${A(r.amount)}</td>
+      <td class="c">${dh}</td></tr>`;
+  }).join('');
+  renderPg('rl',tot,pp,p,'rlPg');
+}
+
+// ═══════════════════════════ 3. ALERTS ═══════════════════════════
+function renderAlerts(){
+  const spikes=ALERTS.filter(r=>r.alertType==='spike');
+  const drops=ALERTS.filter(r=>r.alertType==='drop');
+  document.getElementById('alertKpi').innerHTML=`
+    <div class="kpi k-red"><div class="val">${spikes.length}</div><div class="lbl">⚡ Rate Spikes ≥${spikeThresh}%</div></div>
+    <div class="kpi k-green"><div class="val">${drops.length}</div><div class="lbl">💚 Rate Drops ≥${spikeThresh}%</div></div>
+    <div class="kpi k-amber"><div class="val">${ALERTS.length}</div><div class="lbl">Total Alerts</div></div>
+    <div class="kpi"><div class="val">${spikeThresh}%</div><div class="lbl">Alert Threshold (adjust slider)</div></div>`;
+
+  // Chart: spikes vs drops per month
+  const smon={},dmon={};
+  spikes.forEach(r=>{const k=r.dateISO.slice(0,7);smon[k]=(smon[k]||0)+1;});
+  drops.forEach(r=>{const k=r.dateISO.slice(0,7);dmon[k]=(dmon[k]||0)+1;});
+  const mks=[...new Set([...Object.keys(smon),...Object.keys(dmon)])].sort();
+  dC('cAlerts');
+  const ca=document.getElementById('cAlerts').getContext('2d');
+  CI['cAlerts']=new Chart(ca,{type:'bar',data:{labels:mks,datasets:[
+    {label:'Spikes',data:mks.map(m=>smon[m]||0),backgroundColor:'rgba(220,38,38,.7)'},
+    {label:'Drops',data:mks.map(m=>dmon[m]||0),backgroundColor:'rgba(22,163,74,.7)'}
+  ]},options:{responsive:true,plugins:{legend:{position:'top'}}}});
+
+  let rows=sortArr(ALERTS,'al');
+  const tot=rows.length;
+  const {p,pp}=PG.al;
+  const paged=rows.slice((p-1)*pp,p*pp);
+  document.getElementById('alertCount').textContent=`${tot} alerts at ≥${spikeThresh}% threshold`;
+  document.getElementById('alertTableTitle').textContent=`Rate Alerts — ≥${spikeThresh}% change vs same vendor`;
+  document.getElementById('alBody').innerHTML=paged.map(r=>`
+    <tr class="${r.alertType==='spike'?'spike-row':'drop-row'}">
+      <td><span class="alert-badge ${r.alertType==='spike'?'ab-spike':'ab-drop'}">${r.alertType==='spike'?'⚡ SPIKE':'💚 DROP'}</span></td>
+      <td>${r.dateStr}</td>
+      <td title="${esc(r.vendor)}">${esc(r.vendor).slice(0,26)}</td>
+      <td title="${esc(r.item)}">${esc(r.item).slice(0,28)}</td>
+      <td class="r">${N(r.prevRate)}</td>
+      <td class="r"><strong>${N(r.rate)}</strong></td>
+      <td class="r ${r.changePct>0?'up':'dn'}">${r.changePct>0?'+':''}${N(r.changePct,1)}%</td>
+      <td class="r ${r.rateChange>0?'up':'dn'}">${r.rateChange>0?'+':''}${N(r.rateChange)}</td>
+      <td>${esc(r.vchNo)}</td>
+    </tr>`).join('');
+  if(!tot) document.getElementById('alBody').innerHTML=`<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">No alerts at ${spikeThresh}% threshold. Try lowering the slider.</td></tr>`;
+  renderPg('al',tot,pp,p,'alPg');
+}
+
+// ═══════════════════════════ 4. COMPARISON ═══════════════════════════
+function populateCIDrop(){
+  const q=document.getElementById('ciSearch').value.toLowerCase();
+  const items=[...new Set(FILTERED.map(r=>r.item))].sort().filter(i=>i.toLowerCase().includes(q));
+  document.getElementById('ciDDL').innerHTML=items.slice(0,60).map(i=>
+    `<div class="ddi${i===compItem?' sel':''}" onclick="selCI('${encodeURIComponent(i)}')">${esc(i)}</div>`).join('')||'<div class="ddl-empty">No items</div>';
+  document.getElementById('ciDDL').classList.add('open');
+}
+function selCI(item){compItem=decodeURIComponent(item);document.getElementById('ciSearch').value=compItem;document.getElementById('ciDDL').classList.remove('open');renderComp();}
+
+function renderComp(){
+  populateCIDrop();
+  if(!compItem){document.getElementById('compEmpty').style.display='block';document.getElementById('compCC').style.display='none';document.getElementById('compTW').style.display='none';return;}
+  const rows=FILTERED.filter(r=>r.item===compItem);
+  if(!rows.length){document.getElementById('compEmpty').style.display='block';document.getElementById('compCC').style.display='none';document.getElementById('compTW').style.display='none';return;}
+  document.getElementById('compEmpty').style.display='none';
+  const vm={};
+  rows.forEach(r=>{
+    if(!vm[r.vendor]) vm[r.vendor]={vendor:r.vendor,count:0,rates:[],qty:0,spend:0,lastDate:null,lastRate:null};
+    const v=vm[r.vendor]; v.count++; v.rates.push(r.rate); v.qty+=r.qty; v.spend+=r.amount;
+    if(!v.lastDate||r.dateObj>v.lastDate){v.lastDate=r.dateObj;v.lastRate=r.rate;}
+  });
+  const vs=Object.values(vm).map(v=>({...v,minRate:Math.min(...v.rates),maxRate:Math.max(...v.rates),avgRate:v.rates.reduce((a,b)=>a+b)/v.rates.length})).sort((a,b)=>a.minRate-b.minRate);
+  document.getElementById('compCC').style.display='block';
+  document.getElementById('compCTitle').textContent=`Rate Comparison — ${esc(compItem)}`;
+  dC('cComp');
+  const ctx=document.getElementById('cComp').getContext('2d');
+  CI['cComp']=new Chart(ctx,{type:'bar',data:{labels:vs.map(v=>esc(v.vendor).slice(0,18)),datasets:[
+    {label:'Min Rate',data:vs.map(v=>v.minRate),backgroundColor:'rgba(22,163,74,.75)'},
+    {label:'Avg Rate',data:vs.map(v=>v.avgRate),backgroundColor:'rgba(37,99,168,.75)'},
+    {label:'Max Rate',data:vs.map(v=>v.maxRate),backgroundColor:'rgba(220,38,38,.75)'}
+  ]},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:false}}}});
+  const minR=vs[0].minRate;
+  document.getElementById('compTW').style.display='block';
+  document.getElementById('compTTitle').textContent=`Vendor Comparison — ${esc(compItem)}`;
+  document.getElementById('compCnt').textContent=`${vs.length} vendors`;
+  document.getElementById('compBody').innerHTML=vs.map(v=>`<tr>
+    <td class="${v.minRate===minR?'bv':''}">${esc(v.vendor)}</td>
+    <td class="r">${v.count}</td><td class="r"><strong>${N(v.minRate)}</strong></td>
+    <td class="r">${N(v.maxRate)}</td><td class="r">${N(v.avgRate)}</td>
+    <td class="r">${N(v.lastRate)}</td><td>${v.lastDate?fmtDate(v.lastDate):''}</td>
+    <td class="r">${N(v.qty)}</td><td class="r">${A(v.spend)}</td></tr>`).join('');
+}
+
+// ═══════════════════════════ 5. TREND ═══════════════════════════
+function populateTIDrop(){
+  const q=document.getElementById('tiSearch').value.toLowerCase();
+  const items=[...new Set(FILTERED.map(r=>r.item))].sort().filter(i=>i.toLowerCase().includes(q));
+  document.getElementById('tiDDL').innerHTML=items.slice(0,60).map(i=>
+    `<div class="ddi${i===trendItem?' sel':''}" onclick="selTI('${encodeURIComponent(i)}')">${esc(i)}</div>`).join('')||'<div class="ddl-empty">No items</div>';
+}
+function selTI(i){trendItem=decodeURIComponent(i);document.getElementById('tiSearch').value=trendItem;document.getElementById('tiDDL').classList.remove('open');renderTrend();}
+
+function populateTVDrop(){
+  const q=document.getElementById('tvSearch').value.toLowerCase();
+  const vendors=[...new Set(FILTERED.map(r=>r.vendor))].sort().filter(v=>v.toLowerCase().includes(q));
+  document.getElementById('tvDDL').innerHTML=`<div class="ddi${!trendVendor?' sel':''}" onclick="selTV('')">All Vendors</div>`+
+    vendors.slice(0,60).map(v=>`<div class="ddi${v===trendVendor?' sel':''}" onclick="selTV('${encodeURIComponent(v)}')">${esc(v)}</div>`).join('');
+}
+function selTV(v){trendVendor=decodeURIComponent(v);document.getElementById('tvSearch').value=trendVendor;document.getElementById('tvDDL').classList.remove('open');renderTrend();}
+
+function renderTrend(){
+  populateTIDrop(); populateTVDrop();
+  if(!trendItem){document.getElementById('trendEmpty').style.display='block';document.getElementById('trendCC').style.display='none';document.getElementById('trendTW').style.display='none';return;}
+  let rows=FILTERED.filter(r=>r.item===trendItem&&(!trendVendor||r.vendor===trendVendor)).sort((a,b)=>a.dateObj-b.dateObj);
+  if(!rows.length){document.getElementById('trendEmpty').style.display='block';document.getElementById('trendCC').style.display='none';document.getElementById('trendTW').style.display='none';return;}
+  document.getElementById('trendEmpty').style.display='none';
+  document.getElementById('trendCC').style.display='block';
+  document.getElementById('trendCTitle').textContent=`Rate Trend — ${esc(trendItem)}${trendVendor?' · '+esc(trendVendor):''}`;
+  const vendors=[...new Set(rows.map(r=>r.vendor))];
+  dC('cTrend');
+  const ctx=document.getElementById('cTrend').getContext('2d');
+  CI['cTrend']=new Chart(ctx,{type:'line',data:{datasets:vendors.map((v,i)=>{
+    const vr=rows.filter(r=>r.vendor===v);
+    return {label:esc(v).slice(0,20),data:vr.map(r=>({x:r.dateStr,y:r.rate})),borderColor:COLORS[i%10],tension:.3,pointRadius:4,fill:false};
+  })},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{x:{type:'category'},y:{beginAtZero:false}}}});
+  document.getElementById('trendTW').style.display='block';
+  document.getElementById('trendCnt').textContent=`${rows.length} entries`;
+  const pv={};
+  document.getElementById('trendBody').innerHTML=rows.map(r=>{
+    const pr=pv[r.vendor];
+    const delta=pr!==undefined?r.rate-pr:null;
+    const pct=pr?((r.rate-pr)/pr*100):null;
+    const dh=delta!==null?`<span class="${delta>0?'up':'dn'}">${delta>0?'▲':'▼'} ${N(Math.abs(delta))} (${N(Math.abs(pct),1)}%)</span>`:'<span class="nc">First</span>';
+    pv[r.vendor]=r.rate;
+    return `<tr><td>${r.dateStr}</td><td>${esc(r.vendor).slice(0,22)}</td><td>${esc(r.vchNo)}</td><td class="r">${N(r.qty)}</td><td>${esc(r.unit)}</td><td class="r"><strong>${N(r.rate)}</strong></td><td class="r">${A(r.amount)}</td><td class="c">${dh}</td></tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════ 6. INVOICES ═══════════════════════════
+function renderInvoices(){
+  const im={};
+  FILTERED.forEach(r=>{
+    const k=r.vchNo+'|'+r.vendor;
+    if(!im[k]) im[k]={vchNo:r.vchNo,vendor:r.vendor,date:r.dateStr,dateISO:r.dateISO,items:[],total:0};
+    im[k].items.push(r); im[k].total+=r.amount;
+  });
+  let list=Object.values(im).sort((a,b)=>a.dateISO.localeCompare(b.dateISO));
+  const tot=list.length;
+  const {p,pp}=PG.inv;
+  list=list.slice((p-1)*pp,p*pp);
+  document.getElementById('invCnt').textContent=`${tot.toLocaleString()} invoices`;
+  document.getElementById('invList').innerHTML=list.map(inv=>`
+    <div class="ic"><div class="ih">
+      <span class="vno">📄 ${esc(inv.vchNo)}</span>
+      <span class="vnd">🏢 ${esc(inv.vendor)}</span>
+      <span class="vdt">📅 ${inv.date}</span>
+      <span class="vamt">${A(inv.total)}</span>
+    </div>
+    <div class="ts"><table>
+      <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th>Unit</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>${inv.items.map(r=>`<tr><td>${esc(r.item)}</td><td class="r">${N(r.qty)}</td><td>${esc(r.unit)}</td><td class="r">${N(r.rate)}</td><td class="r">${A(r.amount)}</td></tr>`).join('')}</tbody>
+    </table></div></div>`).join('');
+  renderPg('inv',tot,pp,p,'invPg');
+}
+
+// ═══════════════════════════ 7. LOWEST RATE ═══════════════════════════
+function renderLowest(){
+  const im={};
+  FILTERED.forEach(r=>{
+    if(!im[r.item]) im[r.item]={item:r.item,unit:r.unit,entries:[],vs:new Set()};
+    im[r.item].entries.push(r); im[r.item].vs.add(r.vendor);
+  });
+  let rows=Object.values(im).map(m=>{
+    const es=m.entries;
+    const best=[...es].sort((a,b)=>a.rate-b.rate)[0];
+    const last=[...es].sort((a,b)=>b.dateObj-a.dateObj)[0];
+    const avg=es.reduce((s,r)=>s+r.rate,0)/es.length;
+    return {item:m.item,unit:m.unit,bestVendor:best.vendor,bestRate:best.rate,bestDate:best.dateStr,lastRate:last.rate,lastVendor:last.vendor,avgRate:avg,vendors:m.vs.size,count:es.length};
+  });
+  rows=sortArr(rows,'lw');
+  const tot=rows.length;
+  const {p,pp}=PG.lw;
+  const paged=rows.slice((p-1)*pp,p*pp);
+  document.getElementById('lowCnt').textContent=`${tot.toLocaleString()} items`;
+  document.getElementById('lwBody').innerHTML=paged.map(r=>{
+    const saving=r.lastRate>r.bestRate?`<span class="badge bg-green">Save ${N(((r.lastRate-r.bestRate)/r.lastRate*100),1)}%</span>`:'';
+    return `<tr>
+      <td title="${esc(r.item)}"><strong>${esc(r.item).slice(0,32)}</strong></td>
+      <td>${esc(r.unit)}</td><td class="bv">${esc(r.bestVendor).slice(0,22)}</td>
+      <td class="r"><strong style="color:var(--green)">${N(r.bestRate)}</strong></td>
+      <td>${r.bestDate}</td><td class="r">${N(r.lastRate)}</td>
+      <td>${esc(r.lastVendor).slice(0,18)} ${saving}</td>
+      <td class="r">${N(r.avgRate)}</td>
+      <td class="r">${r.vendors}</td><td class="r">${r.count}</td></tr>`;
+  }).join('');
+  renderPg('lw',tot,pp,p,'lwPg');
+}
+
+// ═══════════════════════════ RATE INCREASE PDF EXPORTS (3 separate reports) ═══════════════════════════
+const INCREASE_THRESHOLD_PCT=2; // fixed: only increases above 2% vs previous bill (same vendor+item)
+
+function computeIncreases(){
+  return ALL.filter(r=>r.changePct!==null && r.changePct>INCREASE_THRESHOLD_PCT);
+}
+
+// Shared: draws the cover/summary page + one data table into a fresh jsPDF doc
+function buildIncreaseReport(doc,rows,columns,rowMapper,columnStyles,headerColor,sectionLabel){
+  const pageW=doc.internal.pageSize.getWidth();
+  const pageH=doc.internal.pageSize.getHeight();
+  const genDate=new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  const totalImpact=rows.reduce((s,r)=>s+(r.rate-r.prevRate)*r.qty,0);
+  const vendorSet=new Set(rows.map(r=>r.vendor));
+  const itemSet=new Set(rows.map(r=>r.item));
+
+  // Cover page
+  doc.setFontSize(18);doc.setFont(undefined,'bold');doc.setTextColor(26,46,74);
+  doc.text('Rate Increase Summary Report',30,45);
+  doc.setFontSize(10);doc.setFont(undefined,'normal');doc.setTextColor(80);
+  doc.text(`Gayatri Industries — Purchase Rate Tracker — ${sectionLabel}`,30,64);
+  doc.setFontSize(9);doc.setTextColor(130);
+  doc.text(`Generated on ${genDate}`,30,80);
+
+  doc.autoTable({
+    startY:100,theme:'plain',styles:{fontSize:10,cellPadding:6},
+    body:[
+      ['Rule applied',`Increases above ${INCREASE_THRESHOLD_PCT}% vs the same vendor's previous bill, for the same item`],
+      ['Dataset scope','Full uploaded dataset (on-screen filters not applied)'],
+      ['Total qualifying increases',String(rows.length)],
+      ['Vendors affected',String(vendorSet.size)],
+      ['Items affected',String(itemSet.size)],
+      ['Estimated extra cost from these increases','₹'+N(totalImpact)+' (qty × rate increase, summed)']
+    ],
+    columnStyles:{0:{fontStyle:'bold',cellWidth:220,textColor:[26,46,74]},1:{cellWidth:400}},
+    margin:{left:30,right:30}
+  });
+
+  // Data table page(s)
+  doc.addPage();
+  const pctColIdx=columns.indexOf('% Incr');
+  function drawHeader(){
+    doc.setFontSize(13);doc.setFont(undefined,'bold');doc.setTextColor(26,46,74);
+    doc.text('Gayatri Industries — Rate Increase Summary',30,25);
+    doc.setFontSize(9);doc.setFont(undefined,'normal');doc.setTextColor(80);
+    doc.text(sectionLabel,30,40);
+    doc.setFontSize(7);doc.setTextColor(130);
+    doc.text(`Generated ${genDate}  |  Increases above ${INCREASE_THRESHOLD_PCT}% vs same vendor's previous bill for that item  |  Full dataset (filters ignored)`,30,52);
+    doc.text(`Page ${doc.internal.getNumberOfPages()}`,pageW-60,pageH-15);
+    doc.setTextColor(0);
+  }
+  doc.autoTable({
+    startY:100,
+    head:[columns],
+    body:rows.map(rowMapper),
+    styles:{fontSize:7,cellPadding:3,overflow:'linebreak'},
+    headStyles:{fillColor:headerColor,textColor:255,fontSize:7,halign:'center'},
+    columnStyles,
+    margin:{top:60,left:20,right:20,bottom:40},
+    didDrawPage:drawHeader,
+    didParseCell:function(data){
+      if(data.section==='body'&&data.column.index===pctColIdx){
+        data.cell.styles.textColor=[220,38,38];
+        data.cell.styles.fontStyle='bold';
+      }
+    }
+  });
+}
+
+function generateVendorWisePDF(){
+  if(!ALL.length){alert('Please upload a purchase register file first.');return;}
+  const increases=computeIncreases();
+  if(!increases.length){alert(`No rate increases above ${INCREASE_THRESHOLD_PCT}% found in the full dataset.`);return;}
+  const rows=[...increases].sort((a,b)=>a.vendor.localeCompare(b.vendor)||a.dateObj-b.dateObj);
+  const columns=['Vendor','Item','Invoice No.','Date','Qty','Unit','Rate','Prev Rate','% Incr','Prev Date','Prev Inv No.','Amount'];
+  const columnStyles={
+    0:{cellWidth:95},1:{cellWidth:105},2:{cellWidth:60},3:{cellWidth:55},
+    4:{cellWidth:35,halign:'right'},5:{cellWidth:30},6:{cellWidth:45,halign:'right'},
+    7:{cellWidth:50,halign:'right'},8:{cellWidth:45,halign:'right'},9:{cellWidth:55},
+    10:{cellWidth:60},11:{cellWidth:60,halign:'right'}
+  };
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'landscape',unit:'pt',format:'a4'});
+  buildIncreaseReport(doc,rows,columns,
+    r=>[r.vendor,r.item,r.vchNo,r.dateStr,N(r.qty),r.unit,N(r.rate),N(r.prevRate),'+'+N(r.changePct,1)+'%',r.prevDate||'',r.prevVchNo||'',A(r.amount)],
+    columnStyles,[26,46,74],
+    'Vendor-wise — each vendor\'s items whose rate increased vs their previous bill');
+  doc.save(`Rate_Increase_VendorWise_${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+function generateItemWisePDF(){
+  if(!ALL.length){alert('Please upload a purchase register file first.');return;}
+  const increases=computeIncreases();
+  if(!increases.length){alert(`No rate increases above ${INCREASE_THRESHOLD_PCT}% found in the full dataset.`);return;}
+  const rows=[...increases].sort((a,b)=>a.item.localeCompare(b.item)||a.vendor.localeCompare(b.vendor)||a.dateObj-b.dateObj);
+  const columns=['Item','Vendor','Invoice No.','Date','Qty','Unit','Rate','Prev Rate','% Incr','Prev Date','Prev Inv No.','Amount'];
+  const columnStyles={
+    0:{cellWidth:105},1:{cellWidth:95},2:{cellWidth:60},3:{cellWidth:55},
+    4:{cellWidth:35,halign:'right'},5:{cellWidth:30},6:{cellWidth:45,halign:'right'},
+    7:{cellWidth:50,halign:'right'},8:{cellWidth:45,halign:'right'},9:{cellWidth:55},
+    10:{cellWidth:60},11:{cellWidth:60,halign:'right'}
+  };
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'landscape',unit:'pt',format:'a4'});
+  buildIncreaseReport(doc,rows,columns,
+    r=>[r.item,r.vendor,r.vchNo,r.dateStr,N(r.qty),r.unit,N(r.rate),N(r.prevRate),'+'+N(r.changePct,1)+'%',r.prevDate||'',r.prevVchNo||'',A(r.amount)],
+    columnStyles,[124,58,237],
+    'Raw Material-wise — each item\'s vendors whose rate increased vs previous bill');
+  doc.save(`Rate_Increase_RawMaterialWise_${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+function generateDateWisePDF(){
+  if(!ALL.length){alert('Please upload a purchase register file first.');return;}
+  const increases=computeIncreases();
+  if(!increases.length){alert(`No rate increases above ${INCREASE_THRESHOLD_PCT}% found in the full dataset.`);return;}
+  const rows=[...increases].sort((a,b)=>a.dateObj-b.dateObj||a.vendor.localeCompare(b.vendor)||a.item.localeCompare(b.item));
+  const columns=['Date','Vendor','Item','Invoice No.','Qty','Unit','Rate','Prev Rate','% Incr','Prev Date','Prev Inv No.','Amount'];
+  const columnStyles={
+    0:{cellWidth:55},1:{cellWidth:95},2:{cellWidth:105},3:{cellWidth:60},
+    4:{cellWidth:35,halign:'right'},5:{cellWidth:30},6:{cellWidth:45,halign:'right'},
+    7:{cellWidth:50,halign:'right'},8:{cellWidth:45,halign:'right'},9:{cellWidth:55},
+    10:{cellWidth:60},11:{cellWidth:60,halign:'right'}
+  };
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'landscape',unit:'pt',format:'a4'});
+  buildIncreaseReport(doc,rows,columns,
+    r=>[r.dateStr,r.vendor,r.item,r.vchNo,N(r.qty),r.unit,N(r.rate),N(r.prevRate),'+'+N(r.changePct,1)+'%',r.prevDate||'',r.prevVchNo||'',A(r.amount)],
+    columnStyles,[234,88,12],
+    'Date-wise — rate increases grouped by exact invoice date');
+  doc.save(`Rate_Increase_DateWise_${new Date().toISOString().slice(0,10)}.pdf`);
+}
+</script>
+</body>
+</html>
