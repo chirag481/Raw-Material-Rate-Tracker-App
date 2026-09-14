@@ -1,6 +1,6 @@
 ## Purchase Rate Tracker
 
-A browser-based purchase rate intelligence tool that ingests structured, pre defined and clean raw material purchase register data and 
+A browser-based purchase rate intelligence tool that ingests structured, pre defined and clean raw material purchase register data in Excel and 
 automatically flags price anomalies, compares vendor rates, and generates audit-ready PDF reports 
 — no backend, no installation, runs entirely client-side.
 
